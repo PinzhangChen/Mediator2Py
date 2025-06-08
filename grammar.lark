@@ -1,0 +1,212 @@
+// ignore whitespaces
+%import common.WS
+%ignore WS
+
+// terminals
+TDEF : "Tdef"
+AS : "As"
+INT : "Int"
+DDOT : "Ddot"
+REAL : "Real"
+BOOL : "Bool"
+CHAR : "Char"
+ENUM : "Enum"
+ABSTYPE : "Abstype"
+TUPLE : "Tuple"
+MAP : "Map"
+STRUCT : "Struct"
+INIT : "Init"
+INTERFACE : "Interface"
+IN : "In"
+OUT : "Out"
+FUNCTYPE : "Functype"
+AUTO : "Auto"
+VARS : "Vars"
+FUNC : "Func"
+STMTS : "Stmts"
+RETURN : "Return"
+TRANS : "Trans"
+GRP : "Grp"
+SYNC : "Sync"
+ASYNC : "Async"
+SYS : "Sys"
+INTER : "Inter"
+COMP : "Comp"
+CONN : "Conn"
+LPAREN : "Lparen"
+RPAREN : "Rparen"
+LBRACE : "Lbrace"
+RBRACE : "Rbrace"
+LBRACK : "Lbrack"
+RBRACK : "Rbrack"
+COMMA : "Comma"
+SEMICOLON : "Semicolon"
+COLON : "Colon"
+PLUS : "Plus"
+MUL : "Mul"
+MOD : "Mod"
+DOT : "Dot"
+EQ : "Eq"
+ASSGT : "Assgt"
+MAPSTO : "Mapsto"
+MIN : "Min"
+TRANSTO : "Transto"
+GEQ : "Geq"
+GT : "Gt"
+LEQ : "Leq"
+LT : "Lt"
+DIV : "Div"
+MID : "Mid"
+OR : "Or"
+NOT : "Not"
+NEQ : "Neq"
+AND : "And"
+
+IDENTIFIER : /Id@\d+/
+VALUE : /Val@\d+/
+?io : IN | OUT
+
+// the parser should accept program
+program : ( typedef | function | automaton | system )*
+
+//
+// type-related
+//
+typedef : "Tdef" (_type_or_alias | _parameter_type) "As" IDENTIFIER "Semicolon"
+
+_type : _primitive_type | _composite_type
+_type_or_alias : _type | IDENTIFIER | "Lparen" _type_or_alias "Rparen"
+
+// primitive types 
+_primitive_type : int
+                | bounded_int
+                | real
+                | bool
+                | char
+                | enum_type
+int : "Int"
+bounded_int : "Int" (IDENTIFIER | VALUE) "Ddot" (IDENTIFIER | VALUE)
+real : "Real"
+bool : "Bool"
+char : "Char"
+enum_type : "Enum" "Lbrace" [IDENTIFIER ("Comma" IDENTIFIER)*] "Rbrace"
+
+// composite types
+_composite_type : tuple_type | union_type | array_type | list_type | map_type | struct_type | init_type
+_type_factor_a : tuple_type | union_type | array_type | list_type | map_type | struct_type | _primitive_type | IDENTIFIER | "Lparen" _type_or_alias "Rparen"
+tuple_type : "Tuple" "Lparen" _type_or_alias ("Comma" _type_or_alias)* "Rparen" | "Tuple" "Lparen" _type_or_alias "Comma" "Rparen"
+union_type : "Lparen" _type_or_alias ("Mid" _type_or_alias)+ "Rparen"
+array_type : _type_or_alias "Lbrack" (IDENTIFIER | VALUE) "Rbrack"
+list_type : _type_or_alias "Lbrack" "Rbrack"
+map_type : "Map" "Lbrack" _type_or_alias "Rbrack" _type_factor_a
+struct_type : "Struct" "Lbrace" [IDENTIFIER "Colon" _type_or_alias ("Comma" IDENTIFIER "Colon" _type_or_alias)*] "Rbrace"
+init_type : _type_or_alias "Lparen" "Init"  term "Rparen"
+
+// parameter types
+_parameter_type : function_type | interface_type
+interface_type : "Lparen" io _type_or_alias ("Comma" io _type_or_alias)* "Rparen"
+function_type : "Functype" "Lparen" _type_or_alias ("Comma" _type_or_alias)* "Rparen" "Colon" _type_or_alias
+
+//
+// term-related
+//
+?term : factor_h | term_h
+_primal : "Lparen" term "Rparen"
+?term_a : VALUE
+     | IDENTIFIER
+     | IDENTIFIER [template_apply] "Lparen" [term ("Comma" term)*] "Rparen" -> func_term
+     | "Struct" "Lbrace" [IDENTIFIER "Assgt" term ("Comma" IDENTIFIER "Assgt" term)*] "Rbrace" -> struct_term
+     | "Lbrack" [term ("Comma" term)*] "Rbrack" -> list_term
+     | "Map" "Lbrack" [term "Mapsto" term ("Comma" term "Mapsto" term)*] "Rbrack" -> map_term
+     | term_a "Dot" IDENTIFIER -> dot_term
+     | term_a "Lbrack" term "Rbrack" -> brack_term
+     | "Lparen" term "Comma" "Rparen" -> tuple_term
+     | "Lparen" term ("Comma" term)+ "Rparen" -> tuple_term
+
+// logical NOT  unary + -
+?factor_b : term_a | _primal
+term_b : (PLUS | MIN | NOT) factor_b
+
+// *  /  %
+?factor_c : factor_b | term_b
+term_c : factor_c ((MUL | DIV | MOD) factor_c)+
+
+// binary + -
+?factor_d : factor_c | term_c
+term_d : factor_d ((PLUS | MIN) factor_d)+
+
+// >=  >  <=  <
+?factor_e : factor_d | term_d
+term_e : factor_e ((GEQ | GT | LEQ | LT) factor_e)+
+
+// ==  !=
+?factor_f : factor_e | term_e
+term_f : factor_f ((EQ | NEQ) factor_f)+
+
+// logical AND
+?factor_g : factor_f | term_f
+term_g : factor_g ("And" factor_g)+
+
+// logical OR
+?factor_h : factor_g | term_g
+term_h : factor_h ("Or" factor_h)+
+
+
+//
+// the "template" part in the declaration of functions, automata or systems
+//
+template_decl : "Lt" IDENTIFIER "Colon" (_type_or_alias | _parameter_type | ABSTYPE) ("Comma" IDENTIFIER "Colon" (_type_or_alias | _parameter_type | ABSTYPE))* "Gt"
+
+template_apply : "Lt" _template_param ("Comma" _template_param)* "Gt"
+
+_template_param : _type | _parameter_type | template_value_param | IDENTIFIER | "Lparen" _template_param "Rparen"
+
+?template_value_param : VALUE 
+    | IDENTIFIER DOT IDENTIFIER -> enum_template_param
+    | "Lparen" (IDENTIFIER | template_value_param) "Comma" "Rparen" -> tuple_template_param 
+    | "Lparen" (IDENTIFIER | template_value_param) ("Comma" (IDENTIFIER | template_value_param))+ "Rparen" -> tuple_template_param 
+    | "Lbrack" (IDENTIFIER | template_value_param) ("Comma" (IDENTIFIER | template_value_param))* "Rbrack" -> list_template_param
+    | "Map" "Lbrack" [(IDENTIFIER | template_value_param) "Mapsto" (IDENTIFIER | template_value_param) ("Comma" ((IDENTIFIER | template_value_param) "Mapsto" (IDENTIFIER | template_value_param)))*] "Rbrack" -> map_template_param
+    | "Struct" "Lbrace" [IDENTIFIER "Assgt" (IDENTIFIER | template_value_param) ("Comma" (IDENTIFIER "Assgt" (IDENTIFIER | template_value_param)))*] "Rbrace" -> struct_template_param
+
+//
+// functions
+//
+function : "Func" [template_decl] IDENTIFIER function_signature "Lbrace" [VARS LBRACE (var_decl "Semicolon")* RBRACE] STMTS LBRACE (assign_stmt "Semicolon")* return_stmt "Semicolon" RBRACE "Rbrace"
+function_signature : "Lparen" [IDENTIFIER "Colon" _type_or_alias ("Comma" IDENTIFIER "Colon" _type_or_alias)*] "Rparen" "Colon" _type_or_alias
+assign_stmt : lhs "Assgt" rhs
+lhs: (term ("Comma" term)* | "Lparen" term ("Comma" term)* "Rparen" | "Lparen" term "Comma" "Rparen")
+rhs: (term ("Comma" term)* | "Lparen" term ("Comma" term)* "Rparen" | "Lparen" term "Comma" "Rparen")
+return_stmt : "Return" term 
+var_decl : (IDENTIFIER ("Comma" IDENTIFIER)* | "Lparen" IDENTIFIER ("Comma" IDENTIFIER)* "Rparen" | "Lparen" IDENTIFIER "Comma" "Rparen") "Colon" _type_or_alias 
+
+//
+// automata
+//
+automaton : "Auto" [template_decl] IDENTIFIER entity_signature "Lbrace" [automaton_vars] [automaton_trans] "Rbrace"
+port : IDENTIFIER "Colon" io _type_or_alias
+entity_signature: "Lparen" [port ("Comma" port)*] "Rparen"
+automaton_vars: "Vars" "Lbrace" (var_decl "Semicolon")* "Rbrace"
+automaton_trans: "Trans" "Lbrace" transition* "Rbrace"
+transition : guarded_stmt 
+    | "Grp" "Lbrace" (guarded_stmt)* "Rbrace" -> guarded_stmt_grp
+guarded_stmt : term "Transto" ( stmt "Semicolon" | "Lbrace" (stmt "Semicolon")* "Rbrace")
+?stmt : assign_stmt 
+     | "Sync" IDENTIFIER+ -> sync_stmt
+
+//
+// systems
+//
+system : "Sys" [template_decl] IDENTIFIER entity_signature "Lbrace" [system_comp] [system_inter] [system_conn] "Rbrace"
+system_comp : "Comp" "Lbrace" (component_decl "Semicolon")* "Rbrace"
+system_inter : "Inter" IDENTIFIER ("Comma" IDENTIFIER)* "Semicolon"
+system_conn : "Conn" "Lbrace" (connection_decl "Semicolon")* "Rbrace"
+
+component_decl : (IDENTIFIER ("Comma" IDENTIFIER)* | "Lparen" IDENTIFIER ("Comma" IDENTIFIER)* "Rparen" | "Lparen" IDENTIFIER "Comma" "Rparen") "Colon" system_type
+connection_decl : IDENTIFIER [template_apply] "Lparen" port_name ("Comma" port_name)* "Rparen" -> entity_connection
+    | (port_name ("Comma" port_name)* | "Lparen" port_name ("Comma" port_name)* "Rparen") ( TRANSTO | "Min" "Lparen" option "Rparen" "Transto") (port_name ("Comma" port_name)* | "Lparen" port_name ("Comma" port_name)* "Rparen") -> simple_connection
+system_type : IDENTIFIER [template_apply]
+port_name : IDENTIFIER "Dot" IDENTIFIER -> comp_port_name
+    | IDENTIFIER -> sys_port_name
+option : "Sync" "Comma" IDENTIFIER -> option_sync
+    | "Async" "Comma" IDENTIFIER "Comma" [IDENTIFIER "Assgt" term] -> option_async
