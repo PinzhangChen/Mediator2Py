@@ -1,5 +1,5 @@
 import lark
-from utils import AttributedTree, DirectedGraph
+from utils import AttributedTree, DFSManager, DirectedGraph
 from typing import List, Set, Dict, Tuple, Any, Callable
 from queue import Queue
 from type_tree import TypeTree, get_term_type, is_type
@@ -15,12 +15,25 @@ class TypeContext:
         self._internal_nodes = {}
     
     def is_var(self, name: str) -> bool:
-        #TODO
-        pass
+        if name in self._signature:
+            return True
+        
+        if name in self._local_vars:
+            return True
+        
+        if name in self._internal_nodes:
+            return True
+        
+        return False
 
     def type_of_var(self, var_name: str) -> TypeTree:
-        #TODO
-        pass
+        if var_name in self._signature:
+            return self._signature[var_name][0]
+        
+        if var_name in self._local_vars:
+            return self._local_vars[var_name]
+        
+        raise NameError(f"Error: '{var_name}' is not a valid variable name.")
 
     def get_type(self, type_alias: str) -> Tuple[TypeTree, str]:
         '''
@@ -133,17 +146,45 @@ class TypeContext:
 
             #TODO: assumption: "term" of initialized type need not to be instantiated (only need to generate their code directly)
     
-    def instantiate(self, type_tree: AttributedTree, in_place: bool = False) -> TypeTree | None:
-        #TODO
-        pass
+    def instantiate(self, type_tree: TypeTree, in_place: bool = False) -> TypeTree | None:
+        def node_operation(current_tree: TypeTree, children_returns: List[TypeTree]) -> TypeTree:
+            if current_tree.name == "IDENTIFIER":
+                alias = current_tree.get_attribute("value")
+                type_tree, type_category = self.get_type(alias)
+                if type_category == "type":
+                    return type_tree
+                return current_tree.copy()
+            
+            result = current_tree.copy()
+            result.children = children_returns
+            return result
+        
+        def node_operation_in_place(current_tree: TypeTree, children_returns: List[TypeTree]) -> TypeTree:
+            if current_tree.name == "IDENTIFIER":
+                alias = current_tree.get_attribute("value")
+                type_tree, type_category = self.get_type(alias)
+                if type_category == "type":
+                    return type_tree
+                return current_tree
+            
+            current_tree.children = children_returns
+            return current_tree
+        
+        if in_place:
+            dfs_manager = DFSManager(type_tree, node_operation_in_place)
+            dfs_manager.run()
+        else:
+            dfs_manager = DFSManager(type_tree, node_operation)
+            return dfs_manager.run()
+            
 
     def is_determined_term(term_tree: AttributedTree) -> bool:
         #TODO
-        pass
+        return True
 
     def copy(self):
         #TODO
-        pass
+        return self
 
     def is_enum_type(self, name: str) -> bool:
         return name in self._identifiers and self._identifiers[name] == "enum"
@@ -156,7 +197,7 @@ class TypeContext:
     
     def set_internal_node(self, name: str):
         #TODO
-        pass
+        self._internal_nodes.append(name)
     
     def get_internal_node_status(self, name: str) -> bool:
         '''

@@ -1,20 +1,76 @@
 from typing import List, Tuple, Dict, Set, Any, Callable
-from utils import AttributedTree, parse_template_apply
+from utils import AttributedTree, DFSManager, TreeAttributes, parse_template_apply
 
 
 class TypeTree(AttributedTree):
     def __init__(self, tree: AttributedTree):
-        #TODO validate the tree
-        #TODO build the tree
-        pass
+        tree_copy = tree.copy()
+        super().__init__(tree_copy.name, tree_copy.attributes, tree_copy.children)
+
+    def __init__(self, name: str, attributes: TreeAttributes | Dict, children: "List[TypeTree]"):
+        super().__init__(name, attributes, children)
+
+    def copy(self) -> "TypeTree":
+        return TypeTree(super().copy())
 
     def get_init_term(self) -> AttributedTree:
-        #TODO
-        pass
+        if self.name == "init":
+            return self.get_attribute("term").copy()
+        
+        if self.name == "tuple":
+            # we need to generate tuple term
+            children_init_terms = []
+            for child in self.children:
+                children_init_terms.append(child.get_init_term())
+            tuple_term = AttributedTree("tuple_term", children=children_init_terms)
+
+            return tuple_term
+        
+        if self.name == "array":
+            entry_init_term = self.children[0].get_init_term()
+            n = self.get_attribute("length")
+            children_init_terms = []
+            for i in range(n):
+                children_init_terms.append(entry_init_term.copy())
+            list_term = AttributedTree("list_term", children=children_init_terms)
+
+            return list_term
+        
+        if self.name == "list":
+            return AttributedTree("list_term")
+        
+        if self.name == "map":
+            return AttributedTree("map_term")
+        
+        if self.name == "struct":
+            fields = self.get_attribute("fields")
+            children = []
+            for i in range(self.n_children):
+                field = fields[i]
+                term_field = AttributedTree(field, TreeAttributes({"value": field}))
+                children.append(term_field)
+
+                term_val = self.children[i].get_init_term()
+                children.append(term_val)
+            
+            term_struct = AttributedTree("struct_term", children=children)
+            
+            return term_struct
+        
+        return None
     
     def de_init(self) -> "TypeTree":
-        #TODO
-        pass
+        def node_operation(type_tree: TypeTree, children_returns: List[TypeTree]) -> TypeTree:
+            if type_tree.name == "init":
+                return children_returns[0]
+            
+            type_tree_copy = type_tree.copy()
+            type_tree_copy.children = children_returns
+            return type_tree_copy
+        
+        dfs_manager = DFSManager(self, node_operation)
+        
+        return dfs_manager.run()
 
     def is_enum_type(self) -> bool:
         if not self.has_attribute("alias"):
@@ -25,17 +81,19 @@ class TypeTree(AttributedTree):
     @staticmethod
     def validate(tree: "TypeTree") -> bool:
         #TODO
-        pass
+        return True
     
     @staticmethod
     def reduce(type_trees: "List[TypeTree]") -> "TypeTree":
         #TODO
-        pass
+        union_type = TypeTree("union", attributes={}, children=type_trees)
+        return union_type
 
     @staticmethod
-    def build_strcut_type(fields: "List[str]", type_trees: "List[TypeTree]") -> "TypeTree":
-        #TODO
-        pass
+    def build_struct_type(fields: "List[str]", type_trees: "List[TypeTree]") -> "TypeTree":
+        result = TypeTree("struct", {"fields": tuple(fields)}, type_trees)
+
+        return result
 
     @staticmethod
     def build_array_type(type_trees: "List[TypeTree]") -> "TypeTree":
@@ -54,8 +112,9 @@ class TypeTree(AttributedTree):
 
     @staticmethod
     def build_tuple_type(type_trees: "List[TypeTree]") -> "TypeTree":
-        #TODO
-        pass
+        result = TypeTree("tuple", {}, type_trees)
+
+        return result
 
     def get_coercion(self, another_type: "TypeTree") -> Any:
         _t1 = self.de_init()
@@ -265,12 +324,14 @@ class TypeTree(AttributedTree):
         pass
 
     def __le__(self, another_type: "TypeTree") -> bool:
-        #TODO
-        pass
+        coercion = self.get_coercion(another_type)
+
+        return coercion != None
 
     def __ge__(self, another_type: "TypeTree") -> bool:
-        #TODO
-        pass
+        coercion = another_type.get_coercion(self)
+
+        return coercion != None
 
 def get_int_type():
     return TypeTree(AttributedTree("int"))

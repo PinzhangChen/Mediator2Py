@@ -49,7 +49,7 @@ class AttributedTree:
     def __str__(self):
         return f"Tree({self.name}, [" + ", ".join(list([str(child) for child in self.children])) + "])"
     
-    def copy(self):
+    def copy(self) -> "AttributedTree":
         stack_tree = [0, self]
         stack_children = [[], []]
         current_tree = self
