@@ -449,9 +449,8 @@ def Lark2AT(t : lark.Tree | lark.Token | str) -> AttributedTree:
 
 
 def parse_template_apply(template_apply: AttributedTree) -> List[AttributedTree]:
-    assert template_apply.name == "template_apply"
-
     #TODO
+    assert template_apply.name == "template_apply"
     pass
 
 def indent_code(python_code: str, level: int = 1) -> str:
